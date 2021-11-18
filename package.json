@@ -1,0 +1,57 @@
+{
+  "name": "EDL_Director",
+  "version": "1.0.0",
+  "description": "a tool to encode files with EDL instructions",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
+  },
+  "author": "NewHero",
+  "license": "ISC",
+  "devDependencies": {
+    "@electron-forge/cli": "^6.0.0-beta.61",
+    "@electron-forge/maker-deb": "^6.0.0-beta.61",
+    "@electron-forge/maker-rpm": "^6.0.0-beta.61",
+    "@electron-forge/maker-squirrel": "^6.0.0-beta.61",
+    "@electron-forge/maker-zip": "^6.0.0-beta.61",
+    "electron": "^15.3.0"
+  },
+  "dependencies": {
+    "electron-progressbar": "^2.0.1",
+    "electron-squirrel-startup": "^1.0.0",
+    "ffbinaries": "^1.1.4",
+    "ini": "^2.0.0",
+    "winston": "^3.3.3"
+  },
+  "config": {
+    "forge": {
+      "packagerConfig": {
+		  "icon": "./icons/icon"
+	  },
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {
+            "name": "edl_director"
+          }
+        },
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "darwin"
+          ]
+        },
+        {
+          "name": "@electron-forge/maker-deb",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/maker-rpm",
+          "config": {}
+        }
+      ]
+    }
+  }
+}

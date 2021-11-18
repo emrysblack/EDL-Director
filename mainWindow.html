@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <title>EDL Director</title>
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self';">
+	<link rel="stylesheet" href="mainWindow.css">
+  </head>
+  <body>
+	<form>
+		<div id="vidFileDragDrop"><div>Drag/Drop a File or Click to Browse</div></div>
+		<div id="mainArea" class="hidden">
+		<div><label>Video File: </label><span id="videoText"></span></div>
+		<br/><br/>
+		<div>
+		<label >EDL File: </label>
+		<div>
+		<input type="text" id="edlText" disabled />
+		<input type="button" value="Browse" id="edlButton" />
+		</div>
+		</div>
+		<br/><br/>
+		<div>
+		<label>Output: </label>
+		<div>
+		<input type="text" id="outputText" disabled />
+		<input type="button" value="Browse" id="outputButton" />
+		</div>
+		</div>
+		<br/><br/>
+		<div id="edl-filters" class="hidden">
+		<table id="edl-filters-table">
+		<caption><input type="button" value="Save EDL Video" id="mergeButton" /></caption>
+		<thead><th>Filter</th><th>Start</th><th>End</th><th></th></thead><tbody></tbody>
+		</table>
+		</div>
+		</div>
+	</form>
+	<script type="text/javascript" src="./mainWindow.js?v=0.1"></script>
+	<template class="filter-row"><tr><td class="filter-type"></td><td class="filter-start"></td><td class="filter-end"></td><td><input type="button" value="Preview" class="previewButton" /></td></tr></template>
+  </body>
+</html>
