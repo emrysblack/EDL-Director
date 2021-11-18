@@ -10,6 +10,9 @@ const http = require('http');
 const winston = require('winston');
 const ini = require('ini'); // TODO, implement user settings with defaults and restore functions
 
+// handle squirrel install
+if (require('electron-squirrel-startup')) return app.quit();
+
 const logConfiguration = {
     transports: [
         new winston.transports.File({
