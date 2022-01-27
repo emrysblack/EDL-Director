@@ -19,6 +19,8 @@
 /dist/
 node_modules/
 out/
+bin/
+user.ini
 SHASUMS256.txt
 **/package-lock.json
 compile_commands.json

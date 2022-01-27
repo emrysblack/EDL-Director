@@ -1,3 +1,4 @@
+.text-info { color:blue; }
 #vidFileDragDrop{
 	position: absolute;
 	top: 0;
@@ -21,5 +22,5 @@
 #edl-filters-table caption { text-align: left; margin-bottom: 20px; }
 th { width: 100px; text-align: left; }
 #edlText, #outputText { width: calc(100% - 190px); }
-label { float: left; width: 100px; }
+label.left { float: left; width: 100px; }
 .hidden { display:none; }

@@ -10,7 +10,7 @@
     "publish": "electron-forge publish"
   },
   "author": "NewHero",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@electron-forge/cli": "^6.0.0-beta.61",
     "@electron-forge/maker-deb": "^6.0.0-beta.61",
@@ -25,25 +25,29 @@
     "electron-squirrel-startup": "^1.0.0",
     "ffbinaries": "^1.1.4",
     "ini": "^2.0.0",
-    "winston": "^3.3.3"
+    "winston": "^3.3.3",
+    "unique-filename": "^1.1.1"
   },
   "config": {
     "forge": {
       "packagerConfig": {
-        "icon": "./icons/icon"
+        "icon": "./icons/icon",
+        "ignore": ".git+"
       },
       "makers": [
         {
           "name": "@electron-forge/maker-squirrel",
           "config": {
             "name": "edl_director",
-			"iconUrl": "https://github.com/emrysblack/EDL-Director/blob/main/icons/icon.ico?raw=true"
+            "iconUrl": "https://github.com/emrysblack/EDL-Director/blob/main/icons/icon.ico?raw=true"
           }
         },
         {
           "name": "@electron-forge/maker-zip",
           "platforms": [
-            "darwin"
+            "darwin",
+            "linux",
+            "win32"
           ]
         },
         {
@@ -55,7 +59,7 @@
           "config": {}
         }
       ],
-	  "publishers": [
+      "publishers": [
         {
           "name": "@electron-forge/publisher-github",
           "config": {
