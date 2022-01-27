@@ -34,7 +34,7 @@
       "packagerConfig": {
         "icon": "./icons/icon",
         "ignore": ".git+",
-        "executableName": "EDL Director"
+        "executableName": "edl-director"
       },
       "makers": [
         {
