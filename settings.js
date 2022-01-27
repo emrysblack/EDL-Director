@@ -1,8 +1,9 @@
 const fs = require("fs");
 const ini = require("ini");
+const path = require("path");
 
-const defaultIni = "./default.ini";
-const userIni = "./user.ini";
+const defaultIni = path.join(__dirname, "default.ini");
+const userIni = path.join(__dirname, "user.ini");
 
 try {
   fs.copyFileSync(defaultIni, userIni, fs.constants.COPYFILE_EXCL);

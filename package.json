@@ -1,5 +1,6 @@
 {
-  "name": "EDL Director",
+  "name": "edl-director",
+  "productName": "EDL Director",
   "version": "1.0.1",
   "description": "a tool to encode files with EDL instructions",
   "main": "main.js",

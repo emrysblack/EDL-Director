@@ -249,7 +249,7 @@ class VideoProcessor {
                   logger.debug(fileContents);
                   try {
                     val = await exec(
-                      `${this.binaries.ffmpeg.path} -y -f concat -safe 0 -i "${tempDir}${path.sep}join.txt" -c copy "${output}"`
+                      `"${this.binaries.ffmpeg.path}" -y -f concat -safe 0 -i "${tempDir}${path.sep}join.txt" -c copy "${output}"`
                     );
                   } catch (error) {
                     reject(error);
