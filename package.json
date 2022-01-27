@@ -33,7 +33,8 @@
     "forge": {
       "packagerConfig": {
         "icon": "./icons/icon",
-        "ignore": ".git+"
+        "ignore": ".git+",
+        "executableName": "EDL Director"
       },
       "makers": [
         {
