@@ -26,6 +26,9 @@ class FFmpegProgressBar {
       req.on("end", () => {
         if (this.job >= this.jobs.length - 1) {
           if (this.progressBar.isInProgress()) {
+            this.progressBar.detail = this.progressBar.detail.length
+              ? "100%"
+              : "";
             this.progressBar.setCompleted();
           }
           //this.progressBar.close();
@@ -39,12 +42,12 @@ class FFmpegProgressBar {
   }
 
   setupProgressBar = () => {
-    logger.info(`Saving file`);
+    logger.info(this.text);
     this.progressBar = new ProgressBar({
       indeterminate: false,
-      title: "Saving Video",
+      title: this.text,
       text: this.text,
-      detail: "Processing...",
+      detail: "",
       maxValue: 100,
       browserWindow: {
         frame: false,
@@ -62,16 +65,18 @@ class FFmpegProgressBar {
       // hack the progress bar a bit to get better stuffs
       const determinate = this.jobs.length && this.jobs[this.job].duration;
       this.progressBar._options.indeterminate = !determinate;
+      this.progressBar.text = this.jobs.length
+        ? this.jobs[this.job].message
+        : this.text;
       if (determinate) {
         const value =
           this.jobs
             .slice(0, this.job)
             .reduce((acc, job) => acc + job.duration, 0) + data;
         const maxValue = this.jobs.reduce((acc, job) => acc + job.duration, 0);
-        this.progressBar.detail = this.jobs.length
-          ? this.jobs[this.job].message
-          : "";
-        this.progressBar.value = (value / maxValue) * 100;
+        const progress = (value / maxValue) * 100;
+        this.progressBar.detail = `${parseInt(progress)}%`;
+        this.progressBar.value = progress;
       }
     }
   };
