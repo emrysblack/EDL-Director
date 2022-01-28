@@ -43,21 +43,20 @@ receive("edlText:value", function (val) {
 receive("edlFilters:value", function (vals) {
   const table = document.querySelector("#edl-filters-table tbody");
   table.innerHTML = "";
-  const strict_mode = document.getElementById("strictMode").checked;
+
   vals.forEach(function (val) {
     console.log(val);
     table.append(document.querySelector(".filter-row").content.cloneNode(true));
     const rows = document.querySelectorAll("#edl-filters-table tbody tr");
     const row = rows[rows.length - 1];
     console.log(row);
-    const end = val.end;
 
     row.dataset.start = val.start;
-    row.dataset.end = end;
+    row.dataset.end = val.end;
     row.dataset.type = val.type;
     row.querySelector(".filter-start").innerText = val.start;
-    row.querySelector(".filter-end").innerHTML = end;
-    row.querySelector(".filter-type").innerText = val.type ? "mute" : "cut";
+    row.querySelector(".filter-end").innerHTML = val.end;
+    row.querySelector(".filter-type").innerText = val.type ? "Mute" : "Cut";
     row.querySelector(".previewButton").onclick = previewFilter;
   });
 });
