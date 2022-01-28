@@ -41,14 +41,8 @@ class VideoJob {
         )
       ),
     ].sort();
-    const cutsDuration = edits
-      .filter((edit) => edit.type === Filter.Types.CUT)
-      .reduce(
-        (acc, edit) => acc + parseFloat(edit.end) - parseFloat(edit.start),
-        0
-      );
     this.command = command;
-    this.duration = parseInt((duration - cutsDuration) * 1000000); // convert to microseconds
+    this.duration = duration * 1000000; // convert to microseconds
     this.message = `Processing ${jobTypes.join(" and ")}...`;
   }
 }
