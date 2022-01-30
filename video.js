@@ -106,7 +106,7 @@ function remux_format(ff, input, output, edits, progress, tempDir, duration) {
       tempDir,
       duration
     );
-    input = `${tempDir}${path.sep}audio.nut`;
+    input = transcodeOut;
   }
   if (cuts.length) {
     const segmentList = `-segment_list ${path.join(tempDir, "out.csv")}`;
@@ -228,6 +228,12 @@ class VideoProcessor {
     // generate file
     const command = commands.map((cmd) => cmd.command).join(" && ");
     logger.debug(command);
+    const cuts = filters.filter((edit) => edit.type === Filter.Types.CUT);
+    const needsJoin = !this.strict_mode && cuts.length > 0;
+    if (needsJoin) {
+      const joinCommand = `"${this.binaries.ffmpeg.path}" -y ${progress} -f concat -safe 0 -i "${tempDir}${path.sep}join.txt" -c copy "${output}"`;
+      commands.push(new VideoJob(joinCommand, this.source.duration, cuts));
+    }
     return {
       jobs: commands,
       process: new Promise(async (resolve, reject) => {
@@ -242,9 +248,8 @@ class VideoProcessor {
                   const fileContents = await generateJoinFile(filters, tempDir);
                   logger.debug(fileContents);
                   try {
-                    val = await exec(
-                      `"${this.binaries.ffmpeg.path}" -y -f concat -safe 0 -i "${tempDir}${path.sep}join.txt" -c copy "${output}"`
-                    );
+                    const joinCommand = commands[commands.length - 1].command;
+                    val = await exec(joinCommand);
                   } catch (error) {
                     reject(error);
                   }
