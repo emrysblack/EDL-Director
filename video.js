@@ -53,7 +53,9 @@ function transcode_format(
   edits,
   progress,
   tempDir,
-  duration
+  duration,
+  start,
+  end
 ) {
   const formatCuts = (cuts) =>
     cuts.map((edit) => `not(between(t,${edit.start},${edit.end}))`).join("*");
@@ -79,15 +81,28 @@ function transcode_format(
   const videoFilter = cuts.length
     ? `-vf "select='${cuts}',setpts=N/FRAME_RATE/TB"`
     : "-c:v copy";
-  const audioFilter = mutes.length
-    ? `-af "${audioArgs.join(",")}" -c:a aac`
-    : "-c:a copy";
-  const command = `"${ff}" -y ${progress} -i ${input} ${videoFilter} ${audioFilter} ${output}`;
+  // audio is always processed either for mutes or to match the cut video
+  const audioFilter = `-af "${audioArgs.join(",")}" -c:a aac`;
+  const command = `"${ff}" -y ${
+    start ? "-ss " + start + " -noaccurate_seek -copyts" : ""
+  } ${
+    end ? "-to " + end : ""
+  } ${progress} -i ${input} ${videoFilter} ${audioFilter} ${output}`;
 
   return [new VideoJob(command, duration, edits)];
 }
 
-function remux_format(ff, input, output, edits, progress, tempDir, duration) {
+function remux_format(
+  ff,
+  input,
+  output,
+  edits,
+  progress,
+  tempDir,
+  duration,
+  start,
+  end
+) {
   // process filters
   const cuts = edits.filter((edit) => edit.type === Filter.Types.CUT);
   const mutes = edits.filter((edit) => edit.type === Filter.Types.MUTE);
@@ -104,7 +119,9 @@ function remux_format(ff, input, output, edits, progress, tempDir, duration) {
       mutes,
       progress,
       tempDir,
-      duration
+      duration,
+      start,
+      end
     );
     input = transcodeOut;
   }
@@ -115,7 +132,11 @@ function remux_format(ff, input, output, edits, progress, tempDir, duration) {
       .reduce((list, edit) => list.concat([edit.start, edit.end]), [])
       .filter((val) => parseFloat(val) > 0 && parseFloat(val) < duration)
       .join(",");
-    const command = `"${ff}" -y ${progress} -i ${input} -codec copy -map 0 -f segment ${segmentList} -reset_timestamps 1 -segment_times ${videoFilter} ${segmentOut}`;
+    const command = `"${ff}" -y ${
+      start ? "-ss " + start + " -copyts -start_at_zero" : ""
+    } ${
+      end ? "-to " + end : ""
+    } ${progress} -i ${input} -codec copy -map 0 -f segment ${segmentList} -reset_timestamps 1 -segment_times ${videoFilter} ${segmentOut}`;
     commands.push(new VideoJob(command, duration, cuts));
   }
   return commands;
@@ -176,17 +197,20 @@ class VideoProcessor {
     });
   }
 
-  async preview(filters, progress = "") {
+  async preview(filters, padding, progress = "") {
     const previewFile =
       uniqueFilename(this.destination.dir, "preview") + this.source.ext;
 
     const windowArgs = '-alwaysontop -window_title "Filter Preview"';
     const command = `"${this.binaries.ffplay.path}" ${windowArgs} -i "${previewFile}"`;
-
+    const start = parseFloat(filters[0].start) - padding;
+    const end = parseFloat(filters[filters.length - 1].end) + padding;
     const { process } = this.merge({
       output: previewFile,
       filters: filters,
       progress: progress,
+      start: start > 0 ? start : 0,
+      end: end < this.source.duration ? end : this.source.duration,
     });
     await process;
 
@@ -203,7 +227,7 @@ class VideoProcessor {
     });
   }
 
-  merge({ output, filters, progress }) {
+  merge({ output, filters, progress, start = null, end = null }) {
     // prep work dir and commands
     try {
       var tempDir = fs.mkdtempSync(path.join(path.dirname(output), "edl-"));
@@ -212,7 +236,7 @@ class VideoProcessor {
         reject(error);
       });
     }
-    // TODO - fill in logging, change audio codec, change return to wrap just execs so we can return job list and do proper load bar
+
     const format = this.strict_mode ? transcode_format : remux_format;
     const commands = format(
       this.binaries.ffmpeg.path,
@@ -221,7 +245,9 @@ class VideoProcessor {
       filters,
       progress,
       `"${tempDir}"`,
-      this.source.duration
+      this.source.duration,
+      start,
+      end
     );
     logger.debug(commands);
 
