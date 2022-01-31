@@ -329,33 +329,14 @@ async function handlePreviewFile(filter) {
     "Generating Preview"
   );
   const progressAddress = await ffmpegProgressBar.getServerAddress();
-  const filters = [];
+
   // ready data
   filter.type = parseInt(filter.type);
-  const playPadding = 5.0; // time before and after filter points for good previewing
-
-  const begin = new Filter(
-    0,
-    parseFloat(filter.start) - playPadding,
-    Filter.Types.CUT
-  );
-  const end = new Filter(
-    parseFloat(filter.end) + playPadding,
-    videoProcessor.source.duration,
-    Filter.Types.CUT
-  );
-
-  if (begin.end - begin.start > playPadding) {
-    filters.push(begin);
-  }
-  filters.push(filter);
-  if (end.end - end.start > playPadding) {
-    filters.push(end);
-  }
+  const playPadding = 10.0; // time before and after filter points for good previewing
 
   // hand off to processor
   videoProcessor
-    .preview(filters, `-progress ${progressAddress}`)
+    .preview([filter], playPadding, `-progress ${progressAddress}`)
     .catch((error) => {
       logger.error(error.message);
       dialog.showMessageBox(mainWindow, {
