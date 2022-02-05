@@ -43,7 +43,7 @@ function createWindow() {
     messageClient = function (channel, value) {
       mainWindow.webContents.send(channel, value);
     };
-    messageClient("strictMode:init", videoProcessor.strict_mode);
+    messageClient("remuxMode:init", videoProcessor.remux_mode);
   });
 
   // show when ready
@@ -381,9 +381,9 @@ ipcMain.on("preview:clip", function (e, filter) {
   logger.debug(`preview filter: ${JSON.stringify(filter)}`);
   handlePreviewFile(filter);
 });
-ipcMain.on("strictMode", function (e, mode) {
-  logger.info(`strict mode: ${mode}`);
-  videoProcessor.strict_mode = mode;
+ipcMain.on("remuxMode", function (e, mode) {
+  logger.info(`remux mode: ${mode}`);
+  videoProcessor.remux_mode = mode;
   if (messageClient)
     messageClient("edlFilters:value", editDecisionList.filters);
 });

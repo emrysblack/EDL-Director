@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
       "button:click",
       "preview:clip",
       "file:drop",
-      "strictMode",
+      "remuxMode",
     ];
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
     }
   },
   once: (channel, func) => {
-    let validChannels = ["strictMode:init"];
+    let validChannels = ["remuxMode:init"];
     if (validChannels.includes(channel)) {
       // Deliberately strip event as it includes `sender`
       ipcRenderer.once(channel, (event, ...args) => func(...args));

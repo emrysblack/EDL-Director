@@ -16,14 +16,14 @@ document.getElementById("mergeButton").addEventListener("click", function (e) {
   e.preventDefault();
   send("button:click", "mergeFile");
 });
-document.getElementById("strictMode").addEventListener("change", function (e) {
+document.getElementById("remuxMode").addEventListener("change", function (e) {
   e.preventDefault();
-  send("strictMode", this.checked);
+  send("remuxMode", this.checked);
 });
 
 // incoming events
-once("strictMode:init", function (val) {
-  document.getElementById("strictMode").checked = val;
+once("remuxMode:init", function (val) {
+  document.getElementById("remuxMode").checked = val;
 });
 receive("videoText:value", function (val) {
   const valid = val.length;
