@@ -162,11 +162,11 @@ class VideoProcessor {
   source = null;
   destination = null;
   binaries;
-  strict_mode;
+  remux_mode;
 
   constructor(binaries) {
     this.binaries = binaries;
-    this.strict_mode = videoSettings.strict_mode;
+    this.remux_mode = videoSettings.remux_mode;
   }
 
   async load(file) {
@@ -237,7 +237,7 @@ class VideoProcessor {
       });
     }
 
-    const format = this.strict_mode ? transcode_format : remux_format;
+    const format = this.remux_mode ? remux_format : transcode_format;
     const commands = format(
       this.binaries.ffmpeg.path,
       `"${this.source.file}"`,
@@ -255,7 +255,7 @@ class VideoProcessor {
     const command = commands.map((cmd) => cmd.command).join(" && ");
     logger.debug(command);
     const cuts = filters.filter((edit) => edit.type === Filter.Types.CUT);
-    const needsJoin = !this.strict_mode && cuts.length > 0;
+    const needsJoin = this.remux_mode && cuts.length > 0;
     if (needsJoin) {
       const joinCommand = `"${this.binaries.ffmpeg.path}" -y ${progress} -f concat -safe 0 -i "${tempDir}${path.sep}join.txt" -c copy "${output}"`;
       commands.push(new VideoJob(joinCommand, this.source.duration, cuts));
