@@ -335,7 +335,7 @@ async function handlePreviewFile(filter) {
 
   // ready data
   filter.type = parseInt(filter.type);
-  const playPadding = 10.0; // time before and after filter points for good previewing
+  const playPadding = 5.0; // time before and after filter points for good previewing
 
   // hand off to processor
   videoProcessor
