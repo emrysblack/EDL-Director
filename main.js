@@ -165,7 +165,7 @@ if (process.platform == "darwin") {
 }
 
 // if not live, use dev tools
-if (process.env.NODE_ENV != "production") {
+if (!app.isPackaged) {
   menuTemplate.push({
     label: "Developer Tools",
     submenu: [
