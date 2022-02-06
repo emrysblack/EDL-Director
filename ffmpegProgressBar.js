@@ -31,7 +31,6 @@ class FFmpegProgressBar {
               : "";
             this.progressBar.setCompleted();
           }
-          //this.progressBar.close();
           logger.info("done");
         }
         this.job++;
@@ -45,6 +44,7 @@ class FFmpegProgressBar {
     logger.info(this.text);
     this.progressBar = new ProgressBar({
       indeterminate: false,
+      closeOnComplete: false,
       title: this.text,
       text: this.text,
       detail: "",
@@ -96,6 +96,11 @@ class FFmpegProgressBar {
   set tasks(value) {
     this.jobs = value;
     this.job = 0;
+  }
+  close() {
+    if (this.progressBar) {
+      this.progressBar.close();
+    }
   }
 }
 

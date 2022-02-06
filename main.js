@@ -320,6 +320,9 @@ async function handleMergeFile() {
         title: "Error",
         buttons: [],
       });
+    })
+    .finally(() => {
+      ffmpegProgressBar.close();
     });
 }
 
@@ -345,6 +348,9 @@ async function handlePreviewFile(filter) {
         title: "Error",
         buttons: [],
       });
+    })
+    .finally(() => {
+      ffmpegProgressBar.close();
     });
 }
 
