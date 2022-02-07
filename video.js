@@ -136,7 +136,7 @@ function remux_format(
       start ? "-ss " + start + " -copyts -start_at_zero" : ""
     } ${
       end ? "-to " + end : ""
-    } ${progress} -i ${input} -codec copy -map 0 -f segment ${segmentList} -reset_timestamps 1 -segment_times ${videoFilter} ${segmentOut}`;
+    } ${progress} -i ${input} -codec copy -map 0:v:0 -map 0:a -f segment ${segmentList} -reset_timestamps 1 -segment_times ${videoFilter} ${segmentOut}`;
     commands.push(new VideoJob(command, duration, cuts));
   }
   return commands;
@@ -210,14 +210,21 @@ class VideoProcessor {
         `"${this.source.file}"`,
       ];
       const command = args.join(" ");
-      log.debug(command);
+      logger.debug(command);
       const { stdout } = await exec(command);
       const { frames } = JSON.parse(stdout);
-      if (frames.length > 1 || start == 0 || end >= this.source.duration) {
-        const { pkt_pts_time: time } = frames.find(
-          ({ pkt_pts_time }) => seconds <= parseFloat(pkt_pts_time)
-        );
+      const frame = frames.find(({ pkt_pts_time })=> seconds <= parseFloat(pkt_pts_time));
+      if (frame) {
+        const { pkt_pts_time: time } = frame;
         return parseFloat(time);
+      }
+      else if (start == 0)
+      {
+        return 0;
+      }
+      else if (end >= this.source.duration)
+      {
+        return this.source.duration;
       }
       delta += 5.0;
     }
@@ -236,7 +243,7 @@ class VideoProcessor {
         `"${this.source.file}"`,
       ];
       const command = args.join(" ");
-      log.debug(command);
+      logger.debug(command);
       const { stdout } = await exec(command);
       const { frames } = JSON.parse(stdout);
       if (frames.length > 1 || start == 0) {
