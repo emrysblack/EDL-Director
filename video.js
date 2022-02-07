@@ -136,7 +136,7 @@ function remux_format(
       start ? "-ss " + start + " -copyts -start_at_zero" : ""
     } ${
       end ? "-to " + end : ""
-    } ${progress} -i ${input} -codec copy -map 0 -f segment ${segmentList} -reset_timestamps 1 -segment_times ${videoFilter} ${segmentOut}`;
+    } ${progress} -i ${input} -codec copy -map 0:v:0 -map 0:a -f segment ${segmentList} -reset_timestamps 1 -segment_times ${videoFilter} ${segmentOut}`;
     commands.push(new VideoJob(command, duration, cuts));
   }
   return commands;
@@ -197,14 +197,82 @@ class VideoProcessor {
     });
   }
 
+  async getNextKeyFrame(seconds) {
+    let delta = 5.0;
+    while (true) {
+      const start = seconds > 0 ? seconds : 0;
+      const end = seconds + delta;
+      const args = [
+        `"${this.binaries.ffprobe.path}"`,
+        `-read_intervals ${start}%${end}`,
+        "-v error -skip_frame nokey -show_entries",
+        "frame=pkt_pts_time -select_streams v -of json",
+        `"${this.source.file}"`,
+      ];
+      const command = args.join(" ");
+      logger.debug(command);
+      const { stdout } = await exec(command);
+      const { frames } = JSON.parse(stdout);
+      const frame = frames.find(({ pkt_pts_time })=> seconds <= parseFloat(pkt_pts_time));
+      if (frame) {
+        const { pkt_pts_time: time } = frame;
+        return parseFloat(time);
+      }
+      else if (start == 0)
+      {
+        return 0;
+      }
+      else if (end >= this.source.duration)
+      {
+        return this.source.duration;
+      }
+      delta += 5.0;
+    }
+  }
+
+  async getPrevKeyFrame(seconds) {
+    let delta = 5.0;
+    while (true) {
+      const start = delta < seconds ? seconds - delta : 0;
+      const end = seconds > 0 ? seconds : delta;
+      const args = [
+        `"${this.binaries.ffprobe.path}"`,
+        `-read_intervals ${start}%${end}`,
+        "-v error -skip_frame nokey -show_entries",
+        "frame=pkt_pts_time -select_streams v -of json",
+        `"${this.source.file}"`,
+      ];
+      const command = args.join(" ");
+      logger.debug(command);
+      const { stdout } = await exec(command);
+      const { frames } = JSON.parse(stdout);
+      if (frames.length > 1 || start == 0) {
+        const { pkt_pts_time } = frames[frames.length - 1];
+        return parseFloat(pkt_pts_time);
+      }
+      delta += 5.0;
+    }
+  }
+
   async preview(filters, padding, progress = "") {
     const previewFile =
       uniqueFilename(this.destination.dir, "preview") + this.source.ext;
 
     const windowArgs = '-alwaysontop -window_title "Filter Preview"';
     const command = `"${this.binaries.ffplay.path}" ${windowArgs} -i "${previewFile}"`;
-    const start = parseFloat(filters[0].start) - padding;
-    const end = parseFloat(filters[filters.length - 1].end) + padding;
+
+    // normalize filters for remux mode
+    const filter_start = this.remux_mode
+      ? await this.getNextKeyFrame(parseFloat(filters[0].start))
+      : parseFloat(filters[0].start);
+    const filter_end = this.remux_mode
+      ? await this.getNextKeyFrame(parseFloat(filters[filters.length - 1].end))
+      : parseFloat(filters[filters.length - 1].end);
+    const sTime = filter_start - padding;
+    const eTime = filter_end + padding;
+
+    const start = this.remux_mode ? await this.getPrevKeyFrame(sTime) : sTime;
+    const end = this.remux_mode ? await this.getNextKeyFrame(eTime) : eTime;
     const { process } = this.merge({
       output: previewFile,
       filters: filters,
