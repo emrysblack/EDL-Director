@@ -266,7 +266,7 @@ async function handleOutputDirDialog() {
     const outputDir = file.filePaths[0];
     const outputPath = path.join(
       outputDir,
-      videoProcessor.destination.filename
+      path.basename(videoProcessor.destination.file)
     );
     videoProcessor.destination.file = outputPath;
     messageClient("outputText:value", outputPath);

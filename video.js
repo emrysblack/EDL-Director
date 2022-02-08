@@ -11,6 +11,10 @@ const uniqueFilename = require("unique-filename");
 
 const exec = util.promisify(child_process.exec);
 
+function filepath(file) {
+  return file.includes(" ") ? `"${file}"` : file;
+}
+
 async function generateJoinFile(edits, tempDir) {
   const fileContents = [];
   const cut = edits.find((edit) => edit.type === Filter.Types.CUT);
@@ -23,7 +27,7 @@ async function generateJoinFile(edits, tempDir) {
     let fileIndex = parseFloat(cut.start) > 0 ? 0 : 1; // odds or evens
     for await (const line of rl) {
       const [file, start, end] = line.trim().split(",");
-      const fileNum = parseInt(file.replace("out", "").replace(".nut", ""));
+      const fileNum = parseInt(file.replace("out", ""));
       if ((fileNum + 2) % 2 == fileIndex) {
         fileContents.push(`file ${file}`);
       }
@@ -83,11 +87,11 @@ function transcode_format(
     : "-c:v copy";
   // audio is always processed either for mutes or to match the cut video
   const audioFilter = `-af "${audioArgs.join(",")}" -c:a aac`;
-  const command = `"${ff}" -y ${
+  const command = `${filepath(ff)} -y ${
     start ? "-ss " + start + " -noaccurate_seek -copyts" : ""
-  } ${
-    end ? "-to " + end : ""
-  } ${progress} -i ${input} ${videoFilter} ${audioFilter} ${output}`;
+  } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
+    input
+  )} ${videoFilter} ${audioFilter} ${filepath(output)}`;
 
   return [new VideoJob(command, duration, edits)];
 }
@@ -110,7 +114,7 @@ function remux_format(
 
   if (mutes.length) {
     const transcodeOut = cuts.length
-      ? `${tempDir}${path.sep}audio.nut`
+      ? path.join(tempDir, `audio${path.extname(input)}`)
       : output;
     commands = transcode_format(
       ff,
@@ -126,35 +130,30 @@ function remux_format(
     input = transcodeOut;
   }
   if (cuts.length) {
-    const segmentList = `-segment_list ${path.join(tempDir, "out.csv")}`;
-    const segmentOut = path.join(tempDir, "out%03d.nut");
+    const segmentList = path.join(tempDir, "out.csv");
+    const segmentOut = path.join(tempDir, `out%03d${path.extname(input)}`);
     const videoFilter = cuts
       .reduce((list, edit) => list.concat([edit.start, edit.end]), [])
       .filter((val) => parseFloat(val) > 0 && parseFloat(val) < duration)
       .join(",");
-    const command = `"${ff}" -y ${
+    const command = `${filepath(ff)} -y ${
       start ? "-ss " + start + " -copyts -start_at_zero" : ""
-    } ${
-      end ? "-to " + end : ""
-    } ${progress} -i ${input} -codec copy -map 0:v:0 -map 0:a -f segment ${segmentList} -reset_timestamps 1 -segment_times ${videoFilter} ${segmentOut}`;
+    } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
+      input
+    )} -codec copy -map 0:v:0 -map 0:a -f segment -segment_list ${filepath(
+      segmentList
+    )} -reset_timestamps 1 -segment_times ${videoFilter} ${filepath(
+      segmentOut
+    )}`;
     commands.push(new VideoJob(command, duration, cuts));
   }
   return commands;
 }
 
 class Video {
-  constructor(file) {
+  constructor(file, duration = 0) {
     this.file = file;
-    this.duration = 0;
-  }
-  get filename() {
-    return this.file.substring(this.file.lastIndexOf(path.sep) + 1);
-  }
-  get dir() {
-    return this.file.substring(0, this.file.lastIndexOf(path.sep));
-  }
-  get ext() {
-    return this.filename.substring(this.filename.lastIndexOf("."));
+    this.duration = duration;
   }
 }
 
@@ -180,16 +179,15 @@ class VideoProcessor {
         reject(new Error("Not a Supported Video File"));
       }
       // everything ok
-      this.source = new Video(file);
-      this.source.duration = result.format.duration;
-      const outputFilename = `${this.source.filename.substring(
-        0,
-        this.source.filename.lastIndexOf(".")
-      )}_merged${this.source.ext}`;
+      this.source = new Video(file, result.format.duration);
+      const outputFilename = `${path.basename(
+        file,
+        path.extname(file)
+      )}_merged${path.extname(file)}`;
 
       const outputDir = this.destination
-        ? this.destination.dir
-        : file.substring(0, file.lastIndexOf(path.sep));
+        ? path.dirname(this.destination.file)
+        : path.dirname(file);
       this.destination = new Video(path.join(outputDir, outputFilename));
 
       logger.debug(`duration: ${this.source.duration}`);
@@ -203,27 +201,25 @@ class VideoProcessor {
       const start = seconds > 0 ? seconds : 0;
       const end = seconds + delta;
       const args = [
-        `"${this.binaries.ffprobe.path}"`,
+        filepath(this.binaries.ffprobe.path),
         `-read_intervals ${start}%${end}`,
         "-v error -skip_frame nokey -show_entries",
         "frame=pkt_pts_time -select_streams v -of json",
-        `"${this.source.file}"`,
+        filepath(this.source.file),
       ];
       const command = args.join(" ");
       logger.debug(command);
       const { stdout } = await exec(command);
       const { frames } = JSON.parse(stdout);
-      const frame = frames.find(({ pkt_pts_time })=> seconds <= parseFloat(pkt_pts_time));
+      const frame = frames.find(
+        ({ pkt_pts_time }) => seconds <= parseFloat(pkt_pts_time)
+      );
       if (frame) {
         const { pkt_pts_time: time } = frame;
         return parseFloat(time);
-      }
-      else if (start == 0)
-      {
+      } else if (start == 0) {
         return 0;
-      }
-      else if (end >= this.source.duration)
-      {
+      } else if (end >= this.source.duration) {
         return this.source.duration;
       }
       delta += 5.0;
@@ -236,11 +232,11 @@ class VideoProcessor {
       const start = delta < seconds ? seconds - delta : 0;
       const end = seconds > 0 ? seconds : delta;
       const args = [
-        `"${this.binaries.ffprobe.path}"`,
+        filepath(this.binaries.ffprobe.path),
         `-read_intervals ${start}%${end}`,
         "-v error -skip_frame nokey -show_entries",
         "frame=pkt_pts_time -select_streams v -of json",
-        `"${this.source.file}"`,
+        filepath(this.source.file),
       ];
       const command = args.join(" ");
       logger.debug(command);
@@ -256,10 +252,13 @@ class VideoProcessor {
 
   async preview(filters, padding, progress = "") {
     const previewFile =
-      uniqueFilename(this.destination.dir, "preview") + this.source.ext;
+      uniqueFilename(path.dirname(this.destination.file), "preview") +
+      path.extname(this.source.file);
 
     const windowArgs = '-alwaysontop -window_title "Filter Preview"';
-    const command = `"${this.binaries.ffplay.path}" ${windowArgs} -i "${previewFile}"`;
+    const command = `${filepath(
+      this.binaries.ffplay.path
+    )} ${windowArgs} -i ${filepath(previewFile)}`;
 
     // normalize filters for remux mode
     const filter_start = this.remux_mode
@@ -308,11 +307,11 @@ class VideoProcessor {
     const format = this.remux_mode ? remux_format : transcode_format;
     const commands = format(
       this.binaries.ffmpeg.path,
-      `"${this.source.file}"`,
-      `"${output}"`,
+      this.source.file,
+      output,
       filters,
       progress,
-      `"${tempDir}"`,
+      tempDir,
       this.source.duration,
       start,
       end
@@ -325,7 +324,11 @@ class VideoProcessor {
     const cuts = filters.filter((edit) => edit.type === Filter.Types.CUT);
     const needsJoin = this.remux_mode && cuts.length > 0;
     if (needsJoin) {
-      const joinCommand = `"${this.binaries.ffmpeg.path}" -y ${progress} -f concat -safe 0 -i "${tempDir}${path.sep}join.txt" -c copy "${output}"`;
+      const joinCommand = `${filepath(
+        this.binaries.ffmpeg.path
+      )} -y ${progress} -f concat -safe 0 -i ${filepath(
+        path.join(tempDir, "join.txt")
+      )} -c copy ${filepath(output)}`;
       commands.push(new VideoJob(joinCommand, this.source.duration, cuts));
     }
     return {
