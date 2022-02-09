@@ -169,7 +169,9 @@ class VideoProcessor {
   }
 
   async load(file) {
-    const command = `"${this.binaries.ffprobe.path}" -v quiet -show_error -print_format json -show_format "${file}"`;
+    const command = `${filepath(
+      this.binaries.ffprobe.path
+    )} -v quiet -show_error -print_format json -show_format ${filepath(file)}`;
     logger.debug(command);
     const { stdout } = await exec(command);
     return new Promise((resolve, reject) => {
@@ -198,27 +200,28 @@ class VideoProcessor {
   async getNextKeyFrame(seconds) {
     let delta = 5.0;
     while (true) {
-      const start = seconds > 0 ? seconds : 0;
-      const end = seconds + delta;
+      const start = delta < seconds && seconds > 0 ? seconds - delta : 0;
+      const end = seconds > 0 ? seconds + delta : delta;
       const args = [
         filepath(this.binaries.ffprobe.path),
         `-read_intervals ${start}%${end}`,
         "-v error -skip_frame nokey -show_entries",
-        "frame=pkt_pts_time -select_streams v -of json",
+        "frame=best_effort_timestamp_time -select_streams v -of json",
         filepath(this.source.file),
       ];
       const command = args.join(" ");
       logger.debug(command);
       const { stdout } = await exec(command);
       const { frames } = JSON.parse(stdout);
-      const frame = frames.find(
-        ({ pkt_pts_time }) => seconds <= parseFloat(pkt_pts_time)
-      );
+      const frame = frames
+        .slice(1)
+        .find(
+          ({ best_effort_timestamp_time }) =>
+            seconds <= parseFloat(best_effort_timestamp_time)
+        );
       if (frame) {
-        const { pkt_pts_time: time } = frame;
+        const { best_effort_timestamp_time: time } = frame;
         return parseFloat(time);
-      } else if (start == 0) {
-        return 0;
       } else if (end >= this.source.duration) {
         return this.source.duration;
       }
@@ -229,22 +232,31 @@ class VideoProcessor {
   async getPrevKeyFrame(seconds) {
     let delta = 5.0;
     while (true) {
-      const start = delta < seconds ? seconds - delta : 0;
-      const end = seconds > 0 ? seconds : delta;
+      const start = delta < seconds && seconds > 0 ? seconds - delta : 0;
+      const end = seconds > 0 ? seconds + delta : delta;
       const args = [
         filepath(this.binaries.ffprobe.path),
         `-read_intervals ${start}%${end}`,
         "-v error -skip_frame nokey -show_entries",
-        "frame=pkt_pts_time -select_streams v -of json",
+        "frame=best_effort_timestamp_time -select_streams v -of json",
         filepath(this.source.file),
       ];
       const command = args.join(" ");
       logger.debug(command);
       const { stdout } = await exec(command);
       const { frames } = JSON.parse(stdout);
-      if (frames.length > 1 || start == 0) {
-        const { pkt_pts_time } = frames[frames.length - 1];
-        return parseFloat(pkt_pts_time);
+      const frame = frames
+        .slice(1)
+        .reverse()
+        .find(
+          ({ best_effort_timestamp_time }) =>
+            seconds > parseFloat(best_effort_timestamp_time)
+        );
+      if (frame) {
+        const { best_effort_timestamp_time: time } = frame;
+        return parseFloat(time);
+      } else if (start == 0) {
+        return 0;
       }
       delta += 5.0;
     }
@@ -353,7 +365,7 @@ class VideoProcessor {
                 }
                 resolve(val);
                 // cleanup temp dir
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                //fs.rmSync(tempDir, { recursive: true, force: true });
               }
             );
           })
