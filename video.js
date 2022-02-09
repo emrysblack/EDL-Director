@@ -180,6 +180,7 @@ class VideoProcessor {
       if (result.error !== undefined || result.format.duration === undefined) {
         reject(new Error("Not a Supported Video File"));
       }
+      // todo, try remux 5 sec clip to enable or disable remux mode
       // everything ok
       this.source = new Video(file, result.format.duration);
       const outputFilename = `${path.basename(
@@ -365,7 +366,7 @@ class VideoProcessor {
                 }
                 resolve(val);
                 // cleanup temp dir
-                //fs.rmSync(tempDir, { recursive: true, force: true });
+                fs.rmSync(tempDir, { recursive: true, force: true });
               }
             );
           })
