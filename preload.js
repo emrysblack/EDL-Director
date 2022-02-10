@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
       "outputText:value",
       "edlText:value",
       "edlFilters:value",
+      "remuxMode:available",
     ];
     if (validChannels.includes(channel)) {
       // Deliberately strip event as it includes `sender`
