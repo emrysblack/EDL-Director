@@ -43,7 +43,7 @@ function createWindow() {
     messageClient = function (channel, value) {
       mainWindow.webContents.send(channel, value);
     };
-    messageClient("remuxMode:init", videoProcessor.remux_mode);
+    messageClient("remuxMode:init", videoProcessor.remux_mode_enabled);
   });
 
   // show when ready
@@ -222,6 +222,7 @@ function checkVideoFile(file) {
     .then((value) => {
       messageClient("videoText:value", value);
       messageClient("outputText:value", videoProcessor.destination.file);
+      messageClient("remuxMode:available", videoProcessor.remux_mode_available);
       const defaultEDL = `${value.substring(0, value.lastIndexOf("."))}.edl`;
       loadEdlFile(defaultEDL);
     })
@@ -389,7 +390,7 @@ ipcMain.on("preview:clip", function (e, filter) {
 });
 ipcMain.on("remuxMode", function (e, mode) {
   logger.info(`remux mode: ${mode}`);
-  videoProcessor.remux_mode = mode;
+  videoProcessor.remux_mode_enabled = mode;
   if (messageClient)
     messageClient("edlFilters:value", editDecisionList.filters);
 });

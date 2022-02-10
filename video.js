@@ -91,7 +91,7 @@ function transcode_format(
     start ? "-ss " + start + " -noaccurate_seek -copyts" : ""
   } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
     input
-  )} ${videoFilter} ${audioFilter} ${filepath(output)}`;
+  )} -v error ${videoFilter} ${audioFilter} ${filepath(output)}`;
 
   return [new VideoJob(command, duration, edits)];
 }
@@ -140,7 +140,7 @@ function remux_format(
       start ? "-ss " + start + " -copyts -start_at_zero" : ""
     } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
       input
-    )} -codec copy -map 0:v:0 -map 0:a -f segment -segment_list ${filepath(
+    )} -v error -c:v copy -c:a aac -map 0:v:0 -map 0:a -f segment -segment_list ${filepath(
       segmentList
     )} -reset_timestamps 1 -segment_times ${videoFilter} ${filepath(
       segmentOut
@@ -161,11 +161,17 @@ class VideoProcessor {
   source = null;
   destination = null;
   binaries;
-  remux_mode;
+  remux_mode_enabled;
+  remux_mode_available;
 
   constructor(binaries) {
     this.binaries = binaries;
-    this.remux_mode = videoSettings.remux_mode;
+    this.remux_mode_enabled = videoSettings.remux_mode;
+    this.remux_mode_available = false;
+  }
+
+  get remux_mode() {
+    return this.remux_mode_available && this.remux_mode_enabled;
   }
 
   async load(file) {
@@ -174,15 +180,53 @@ class VideoProcessor {
     )} -v quiet -show_error -print_format json -show_format ${filepath(file)}`;
     logger.debug(command);
     const { stdout } = await exec(command);
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       const result = JSON.parse(stdout);
       // invalid read
       if (result.error !== undefined || result.format.duration === undefined) {
         reject(new Error("Not a Supported Video File"));
       }
-      // todo, try remux 5 sec clip to enable or disable remux mode
       // everything ok
       this.source = new Video(file, result.format.duration);
+      // try remux 5 sec clip to enable or disable remux mode
+      try {
+        var tempDir = fs.mkdtempSync(
+          path.join(path.dirname(this.source.file), "edl-")
+        );
+        const test_command = remux_format(
+          this.binaries.ffmpeg.path,
+          this.source.file,
+          "-",
+          [new Filter(0, 5, Filter.Types.CUT)],
+          "",
+          tempDir,
+          this.source.duration,
+          0,
+          5
+        )
+          .map((cmd) => cmd.command)
+          .join(" && ");
+        console.log(test_command);
+        await exec(test_command);
+        const fileStream = fs.createReadStream(path.join(tempDir, "out.csv"));
+        const rl = readline.createInterface({
+          input: fileStream,
+          crlfDelay: Infinity,
+        });
+        for await (const line of rl) {
+          const [file, start, end] = line.trim().split(",");
+          if (parseFloat(end) == 0) {
+            throw new Error("Could not cut");
+          }
+        }
+        this.remux_mode_available = true;
+      } catch (error) {
+        console.log(error);
+        this.remux_mode_available = false;
+      } finally {
+        // cleanup temp dir
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
       const outputFilename = `${path.basename(
         file,
         path.extname(file)

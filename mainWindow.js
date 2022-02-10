@@ -25,6 +25,9 @@ document.getElementById("remuxMode").addEventListener("change", function (e) {
 once("remuxMode:init", function (val) {
   document.getElementById("remuxMode").checked = val;
 });
+receive("remuxMode:available", function (val) {
+  document.getElementById("remuxModeSection").classList.toggle("hidden", !val);
+});
 receive("videoText:value", function (val) {
   const valid = val.length;
   document.getElementById("videoText").innerText = val;
