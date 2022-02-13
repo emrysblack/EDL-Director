@@ -202,7 +202,7 @@ class VideoProcessor {
           tempDir,
           this.source.duration,
           0,
-          5
+          2.5
         )
           .map((cmd) => cmd.command)
           .join(" && ");
@@ -324,6 +324,7 @@ class VideoProcessor {
     const filter_end = this.remux_mode
       ? await this.getNextKeyFrame(parseFloat(filters[filters.length - 1].end))
       : parseFloat(filters[filters.length - 1].end);
+    console.log("filter", filter_start, filter_end);
     const sTime = filter_start - padding;
     const eTime = filter_end + padding;
 
