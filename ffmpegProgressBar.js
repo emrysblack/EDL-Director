@@ -100,6 +100,7 @@ class FFmpegProgressBar {
   close() {
     if (this.progressBar) {
       this.progressBar.close();
+      this.progressBar = null;
     }
   }
 }
