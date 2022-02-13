@@ -22,12 +22,13 @@
     "electron": "^15.3.0"
   },
   "dependencies": {
+    "deepmerge": "^4.2.2",
     "electron-progressbar": "^2.0.1",
     "electron-squirrel-startup": "^1.0.0",
     "ffbinaries": "^1.1.4",
     "ini": "^2.0.0",
-    "winston": "^3.3.3",
-    "unique-filename": "^1.1.1"
+    "unique-filename": "^1.1.1",
+    "winston": "^3.3.3"
   },
   "config": {
     "forge": {
