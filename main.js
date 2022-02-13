@@ -305,6 +305,7 @@ async function handleMergeFile() {
   ffmpegProgressBar.tasks = jobs;
   process
     .then(() => {
+      ffmpegProgressBar.close();
       dialog.showMessageBox(mainWindow, {
         message: "File Saved Successfully",
         type: "none",
@@ -315,15 +316,13 @@ async function handleMergeFile() {
     })
     .catch((error) => {
       logger.error(error.message);
+      ffmpegProgressBar.close();
       dialog.showMessageBox(mainWindow, {
         message: "Could not save file",
         type: "error",
         title: "Error",
         buttons: [],
       });
-    })
-    .finally(() => {
-      ffmpegProgressBar.close();
     });
 }
 
@@ -341,17 +340,18 @@ async function handlePreviewFile(filter) {
   // hand off to processor
   videoProcessor
     .preview([filter], playPadding, `-progress ${progressAddress}`)
+    .then(() => {
+      ffmpegProgressBar.close();
+    })
     .catch((error) => {
       logger.error(error.message);
+      ffmpegProgressBar.close();
       dialog.showMessageBox(mainWindow, {
         message: "Could not generate preview",
         type: "error",
         title: "Error",
         buttons: [],
       });
-    })
-    .finally(() => {
-      ffmpegProgressBar.close();
     });
 }
 

@@ -359,12 +359,14 @@ class VideoProcessor {
     return new Promise((resolve, reject) => {
       exec(command)
         .then((val) => {
-          // cleanup preview file
-          fs.rmSync(previewFile, { force: true });
           resolve(val);
         })
         .catch((error) => {
           reject(error);
+        })
+        .finally(() => {
+          // cleanup preview file
+          fs.rmSync(previewFile, { force: true });
         });
     });
   }
@@ -432,7 +434,10 @@ class VideoProcessor {
               }
             );
           })
-          .catch((err) => reject(err));
+          .catch((err) => {
+            reject(err); // cleanup temp dir
+            fs.rmSync(tempDir, { recursive: true, force: true });
+          });
       }),
     };
   }
