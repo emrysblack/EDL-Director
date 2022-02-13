@@ -42,9 +42,11 @@ class EDLFileParser {
     });
     // Note: we use the crlfDelay option to recognize all instances of CR LF
     // ('\r\n') in input.txt as a single line break.
-
+    // ignore comments and empty lines
     for await (const line of rl) {
-      filters.push(new Filter(...EDLFileParser.parseEdlLine(line.trim())));
+      if (line.trim().length && line.trim()[0] != "#") {
+        filters.push(new Filter(...EDLFileParser.parseEdlLine(line.trim())));
+      }
     }
     return filters;
   }
