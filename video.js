@@ -11,6 +11,23 @@ const uniqueFilename = require("unique-filename");
 
 const exec = util.promisify(child_process.exec);
 
+const videoCodecs = { auto: "" };
+const audioCodecs = { aac: "-c:a aac" };
+
+function getVideoCodec() {
+  if (!Object.keys(videoCodecs).includes(videoSettings.video)) {
+    logger.error("unsupported video codec, using default");
+    return videoCodecs["auto"];
+  }
+  return videoCodecs[videoSettings.video];
+}
+function getAudioCodec() {
+  if (!Object.keys(audioCodecs).includes(videoSettings.audio)) {
+    logger.error("unsupported audio codec, using default");
+    return audioCodecs["aac"];
+  }
+  return audioCodecs[videoSettings.audio];
+}
 function filepath(file) {
   return file.includes(" ") ? `"${file}"` : file;
 }
@@ -83,10 +100,10 @@ function transcode_format(
     audioArgs.push(`aselect='${cuts}',asetpts=N/SR/TB`);
   }
   const videoFilter = cuts.length
-    ? `-vf "select='${cuts}',setpts=N/FRAME_RATE/TB"`
+    ? `-vf "select='${cuts}',setpts=N/FRAME_RATE/TB" ${getVideoCodec()}`
     : "-c:v copy";
   // audio is always processed either for mutes or to match the cut video
-  const audioFilter = `-af "${audioArgs.join(",")}" -c:a aac`;
+  const audioFilter = `-af "${audioArgs.join(",")}" ${getAudioCodec()}`;
   const command = `${filepath(ff)} -y ${
     start ? "-ss " + start + " -noaccurate_seek -copyts" : ""
   } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
@@ -140,7 +157,7 @@ function remux_format(
       start ? "-ss " + start + " -copyts -start_at_zero" : ""
     } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
       input
-    )} -v error -c:v copy -c:a aac -map 0:v:0 -map 0:a -f segment -segment_list ${filepath(
+    )} -v error -c:v copy ${getAudioCodec()} -map 0:v:0 -map 0:a -f segment -segment_list ${filepath(
       segmentList
     )} -reset_timestamps 1 -segment_times ${videoFilter} ${filepath(
       segmentOut
