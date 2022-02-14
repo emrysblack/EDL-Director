@@ -223,7 +223,7 @@ class VideoProcessor {
         )
           .map((cmd) => cmd.command)
           .join(" && ");
-        console.log(test_command);
+
         await exec(test_command);
         const fileStream = fs.createReadStream(path.join(tempDir, "out.csv"));
         const rl = readline.createInterface({
@@ -233,12 +233,12 @@ class VideoProcessor {
         for await (const line of rl) {
           const [file, start, end] = line.trim().split(",");
           if (parseFloat(end) == 0) {
-            throw new Error("Could not cut");
+            throw new Error("Could not cut video. Disabling remux mode");
           }
         }
         this.remux_mode_available = true;
       } catch (error) {
-        console.log(error);
+        logger.error(error);
         this.remux_mode_available = false;
       } finally {
         // cleanup temp dir
