@@ -257,20 +257,34 @@ async function handleVideoFileDialog() {
   }
 }
 
-async function handleOutputDirDialog() {
-  const file = await dialog.showOpenDialog({
-    properties: ["openDirectory"],
+function handleOutputDialog() {
+  const file = dialog.showSaveDialogSync({
+    defaultPath: videoProcessor.destination.file,
+    filters: [path.extname(videoProcessor.source.file).substring(1)].map(
+      (type) => ({
+        name: type,
+        extensions: [type],
+      })
+    ),
+    properties: [
+      "createDirectory",
+      "showOverwriteConfirmation",
+      "dontAddToRecent",
+    ],
   });
-
-  if (!file.canceled) {
-    logger.debug(`output dir selected: ${file.filePaths[0]}`);
-    const outputDir = file.filePaths[0];
-    const outputPath = path.join(
-      outputDir,
-      path.basename(videoProcessor.destination.file)
-    );
-    videoProcessor.destination.file = outputPath;
-    messageClient("outputText:value", outputPath);
+  if (file == videoProcessor.source.file) {
+    const error = "Cannot overwrite source file. Choose different target.";
+    logger.error(error);
+    dialog.showMessageBox(mainWindow, {
+      message: error,
+      type: "error",
+      title: "Error",
+      buttons: [],
+    });
+  } else if (file) {
+    logger.debug(`output file selected: ${file}`);
+    videoProcessor.destination.file = file;
+    messageClient("outputText:value", file);
   }
 }
 
@@ -361,8 +375,8 @@ ipcMain.on("button:click", function (e, buttonType) {
     case "videoFile":
       handleVideoFileDialog();
       break;
-    case "outputDir":
-      handleOutputDirDialog();
+    case "outputFile":
+      handleOutputDialog();
       break;
     case "edlFile":
       handleEDLFileDialog();

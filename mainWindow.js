@@ -6,7 +6,7 @@ document.querySelector("form").addEventListener("submit", function (e) {
 });
 document.getElementById("outputButton").addEventListener("click", function (e) {
   e.preventDefault();
-  send("button:click", "outputDir");
+  send("button:click", "outputFile");
 });
 document.getElementById("edlButton").addEventListener("click", function (e) {
   e.preventDefault();
