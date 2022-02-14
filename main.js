@@ -197,14 +197,26 @@ const videoFileTypes = [
 
 async function loadEdlFile(edlFile) {
   // Check if the file exists
-  fs.access(edlFile, fs.constants.F_OK, (err) => {
-    if (err) {
-      logger.debug(`${edlFile} does not exist`);
-      return;
-    }
-    editDecisionList
+  try {
+    fs.accessSync(edlFile, fs.constants.F_OK);
+    await editDecisionList
       .load(edlFile)
-      .then(() => {
+      .then(async () => {
+        if (videoProcessor.remux_mode_available) {
+          for (let i = 0; i < editDecisionList.filters.length; i++) {
+            if (editDecisionList.filters[i].type === Filter.Types.CUT) {
+              const start = parseFloat(editDecisionList.filters[i].start);
+              const end = parseFloat(editDecisionList.filters[i].end);
+              const startKeyFrame = await videoProcessor.getNextKeyFrame(start);
+              const endKeyFrame = await videoProcessor.getNextKeyFrame(end);
+              if (start !== startKeyFrame)
+                editDecisionList.filters[i].startKeyFrame = startKeyFrame;
+              if (end !== endKeyFrame)
+                editDecisionList.filters[i].endKeyFrame = endKeyFrame;
+            }
+          }
+        }
+
         messageClient("edlText:value", edlFile);
         messageClient("edlFilters:value", editDecisionList.filters);
       })
@@ -212,19 +224,28 @@ async function loadEdlFile(edlFile) {
         logger.error(error);
         messageClient("edlText:value", error);
       });
-  });
+  } catch (err) {
+    logger.debug(`${edlFile} does not exist`);
+  }
 }
 
 function checkVideoFile(file) {
   logger.debug(`check file: ${file}`);
+  const loader = new ProgressBar({
+    indeterminate: true,
+    title: "Loading",
+    text: "Loading Video",
+    browserWindow: { frame: false, icon: icon },
+  });
   videoProcessor
     .load(file)
-    .then((value) => {
+    .then(async (value) => {
+      const defaultEDL = `${value.substring(0, value.lastIndexOf("."))}.edl`;
+      await loadEdlFile(defaultEDL);
+      loader.close();
       messageClient("videoText:value", value);
       messageClient("outputText:value", videoProcessor.destination.file);
       messageClient("remuxMode:available", videoProcessor.remux_mode_available);
-      const defaultEDL = `${value.substring(0, value.lastIndexOf("."))}.edl`;
-      loadEdlFile(defaultEDL);
     })
     .catch((error) => {
       dialog.showMessageBox(mainWindow, {
@@ -302,7 +323,14 @@ async function handleEDLFileDialog() {
   if (!file.canceled) {
     logger.debug(`edl selected: ${file.filePaths[0]}`);
     const edlFile = file.filePaths[0];
-    loadEdlFile(edlFile);
+    const loader = new ProgressBar({
+      indeterminate: true,
+      title: "Loading",
+      text: "Loading EDL File",
+      browserWindow: { frame: false, icon: icon },
+    });
+    await loadEdlFile(edlFile);
+    loader.close();
   }
 }
 

@@ -18,12 +18,16 @@ document.getElementById("mergeButton").addEventListener("click", function (e) {
 });
 document.getElementById("remuxMode").addEventListener("change", function (e) {
   e.preventDefault();
+  document
+    .getElementById("edl-filters-table")
+    .classList.toggle("remux", this.checked);
   send("remuxMode", this.checked);
 });
 
 // incoming events
 once("remuxMode:init", function (val) {
   document.getElementById("remuxMode").checked = val;
+  document.getElementById("edl-filters-table").classList.toggle("remux", val);
 });
 receive("remuxMode:available", function (val) {
   document.getElementById("remuxModeSection").classList.toggle("hidden", !val);
@@ -35,7 +39,6 @@ receive("videoText:value", function (val) {
   document.getElementById("mainArea").classList.toggle("hidden", !valid);
 });
 receive("outputText:value", function (val) {
-  const valid = val.length;
   document.getElementById("outputText").value = val;
 });
 receive("edlText:value", function (val) {
@@ -57,8 +60,14 @@ receive("edlFilters:value", function (vals) {
     row.dataset.start = val.start;
     row.dataset.end = val.end;
     row.dataset.type = val.type;
-    row.querySelector(".filter-start").innerText = val.start;
-    row.querySelector(".filter-end").innerHTML = val.end;
+    if (val.startKeyFrame) row.dataset.startkeyframe = val.startKeyFrame;
+    if (val.endKeyFrame) row.dataset.endkeyframe = val.endKeyFrame;
+    row.querySelector(".filter-start").innerHTML = val.startKeyFrame
+      ? `<span class="keyframe">${val.startKeyFrame}</span><span class="frame">${val.start}</span>`
+      : val.start;
+    row.querySelector(".filter-end").innerHTML = val.endKeyFrame
+      ? `<span class="keyframe">${val.endKeyFrame}</span><span class="frame">${val.end}</span>`
+      : val.end;
     row.querySelector(".filter-type").innerText = val.type ? "Mute" : "Cut";
     row.querySelector(".previewButton").onclick = previewFilter;
   });

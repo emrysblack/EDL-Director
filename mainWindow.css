@@ -1,26 +1,54 @@
-.text-info { color:blue; }
-#vidFileDragDrop{
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	left: 0;
-	right: 0;
-	background:#cccccc;
-	text-align: center;
+#vidFileDragDrop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #cccccc;
+  text-align: center;
 }
-#vidFileDragDrop > div{
-	position: absolute;
-	bottom: 50%;
-	right: 50%;
-	transform: translateX(50%);
-	font-size: 1.5em;
-	font-weight: 700;
+#vidFileDragDrop > div {
+  position: absolute;
+  bottom: 50%;
+  right: 50%;
+  transform: translateX(50%);
+  font-size: 1.5em;
+  font-weight: 700;
 }
 #edl-filters-table {
-	margin: auto;
+  margin: auto;
 }
-#edl-filters-table caption { text-align: left; margin-bottom: 20px; }
-th { width: 100px; text-align: left; }
-#edlText, #outputText { width: calc(100% - 190px); }
-label.left { float: left; width: 100px; }
-.hidden { display:none; }
+#edl-filters-table caption {
+  text-align: left;
+  margin-bottom: 20px;
+}
+th {
+  width: 100px;
+  text-align: left;
+}
+#edlText,
+#outputText {
+  width: calc(100% - 190px);
+}
+label.left {
+  float: left;
+  width: 100px;
+}
+.hidden {
+  display: none;
+}
+.keyframe {
+  color: blue;
+}
+#edl-filters-table tbody tr[data-startkeyframe] .keyframe,
+#edl-filters-table tbody tr[data-endkeyframe] .keyframe,
+#edl-filters-table.remux tbody tr[data-startkeyframe] .frame,
+#edl-filters-table.remux tbody tr[data-endkeyframe] .frame {
+  display: none;
+}
+#edl-filters-table.remux tbody tr[data-startkeyframe] .keyframe,
+#edl-filters-table.remux tbody tr[data-endkeyframe] .keyframe,
+#edl-filters-table tbody tr[data-startkeyframe] .frame,
+#edl-filters-table tbody tr[data-endkeyframe] .frame {
+  display: inline-block;
+}
