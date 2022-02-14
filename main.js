@@ -307,37 +307,45 @@ async function handleEDLFileDialog() {
 }
 
 async function handleMergeFile() {
-  const ffmpegProgressBar = new FFmpegProgressBar(mainWindow, "Saving");
-  const progressAddress = await ffmpegProgressBar.getServerAddress();
-
-  // merge
-  const { jobs, process } = videoProcessor.merge({
-    filters: editDecisionList.filters,
-    output: videoProcessor.destination.file,
-    progress: `-progress ${progressAddress}`,
+  const confirm = dialog.showMessageBoxSync(mainWindow, {
+    message: "Start processing video?",
+    type: "question",
+    title: "Save Video",
+    buttons: ["Cancel", "Yes"],
   });
-  ffmpegProgressBar.tasks = jobs;
-  process
-    .then(() => {
-      ffmpegProgressBar.close();
-      dialog.showMessageBox(mainWindow, {
-        message: "File Saved Successfully",
-        type: "none",
-        icon: icon,
-        title: "EDL Director",
-        buttons: [],
-      });
-    })
-    .catch((error) => {
-      logger.error(error.message);
-      ffmpegProgressBar.close();
-      dialog.showMessageBox(mainWindow, {
-        message: "Could not save file",
-        type: "error",
-        title: "Error",
-        buttons: [],
-      });
+  if (confirm) {
+    const ffmpegProgressBar = new FFmpegProgressBar(mainWindow, "Saving");
+    const progressAddress = await ffmpegProgressBar.getServerAddress();
+
+    // merge
+    const { jobs, process } = videoProcessor.merge({
+      filters: editDecisionList.filters,
+      output: videoProcessor.destination.file,
+      progress: `-progress ${progressAddress}`,
     });
+    ffmpegProgressBar.tasks = jobs;
+    process
+      .then(() => {
+        ffmpegProgressBar.close();
+        dialog.showMessageBox(mainWindow, {
+          message: "File Saved Successfully",
+          type: "none",
+          icon: icon,
+          title: "EDL Director",
+          buttons: [],
+        });
+      })
+      .catch((error) => {
+        logger.error(error.message);
+        ffmpegProgressBar.close();
+        dialog.showMessageBox(mainWindow, {
+          message: "Could not save file",
+          type: "error",
+          title: "Error",
+          buttons: [],
+        });
+      });
+  }
 }
 
 async function handlePreviewFile(filter) {
