@@ -79,7 +79,16 @@ function previewFilter() {
   const start = row.dataset.start;
   const end = row.dataset.end;
   const type = parseInt(row.dataset.type);
-  send("preview:clip", { start, end, type });
+  const startKeyFrame = row.dataset.startkeyframe;
+  const endKeyFrame = row.dataset.endkeyframe;
+
+  send("preview:clip", {
+    start,
+    end,
+    type,
+    ...(startKeyFrame && { startKeyFrame }),
+    ...(endKeyFrame && { endKeyFrame }),
+  });
 }
 const vidFileDragDrop = document.getElementById("vidFileDragDrop");
 vidFileDragDrop.addEventListener("click", function (e) {

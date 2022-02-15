@@ -335,13 +335,15 @@ class VideoProcessor {
     )} ${windowArgs} -i ${filepath(previewFile)}`;
 
     // normalize filters for remux mode
-    const filter_start = this.remux_mode
-      ? await this.getNextKeyFrame(parseFloat(filters[0].start))
-      : parseFloat(filters[0].start);
-    const filter_end = this.remux_mode
-      ? await this.getNextKeyFrame(parseFloat(filters[filters.length - 1].end))
-      : parseFloat(filters[filters.length - 1].end);
-    console.log("filter", filter_start, filter_end);
+    const filter_start =
+      this.remux_mode && filters[0].startKeyFrame
+        ? parseFloat(filters[0].startKeyFrame)
+        : parseFloat(filters[0].start);
+    const filter_end =
+      this.remux_mode && filters[filters.length - 1].endKeyFrame
+        ? parseFloat(filters[filters.length - 1].endKeyFrame)
+        : parseFloat(filters[filters.length - 1].end);
+
     const sTime = filter_start - padding;
     const eTime = filter_end + padding;
 
