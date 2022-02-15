@@ -225,18 +225,18 @@ class VideoProcessor {
           .join(" && ");
 
         await exec(test_command);
-        const fileStream = fs.createReadStream(path.join(tempDir, "out.csv"));
         const rl = readline.createInterface({
-          input: fileStream,
+          input: fs.createReadStream(path.join(tempDir, "out.csv")),
           crlfDelay: Infinity,
         });
+        this.remux_mode_available = true;
         for await (const line of rl) {
           const [file, start, end] = line.trim().split(",");
           if (parseFloat(end) == 0) {
-            throw new Error("Could not cut video. Disabling remux mode");
+            logger.error("Could not cut video. Disabling remux mode");
+            this.remux_mode_available = false;
           }
         }
-        this.remux_mode_available = true;
       } catch (error) {
         logger.error(error);
         this.remux_mode_available = false;
