@@ -8,26 +8,10 @@ const logger = require("./log");
 const { Filter } = require("./edl");
 const { input } = require("./log");
 const uniqueFilename = require("unique-filename");
+const { getVideoCodec, getAudioCodec } = require("./codec");
 
 const exec = util.promisify(child_process.exec);
 
-const videoCodecs = { auto: "" };
-const audioCodecs = { aac: "-c:a aac" };
-
-function getVideoCodec() {
-  if (!Object.keys(videoCodecs).includes(videoSettings.video)) {
-    logger.error("unsupported video codec, using default");
-    return videoCodecs["auto"];
-  }
-  return videoCodecs[videoSettings.video];
-}
-function getAudioCodec() {
-  if (!Object.keys(audioCodecs).includes(videoSettings.audio)) {
-    logger.error("unsupported audio codec, using default");
-    return audioCodecs["aac"];
-  }
-  return audioCodecs[videoSettings.audio];
-}
 function filepath(file) {
   return file.includes(" ") ? `"${file}"` : file;
 }
