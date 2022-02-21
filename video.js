@@ -96,7 +96,6 @@ class VideoProcessor {
           path.join(path.dirname(this.source.file), ".edl-")
         );
         const test_command = this.remux_format(
-          this.binaries.ffmpeg.path,
           this.source.file,
           "-",
           [new Filter(0, 5, Filter.Types.CUT)],
@@ -210,7 +209,6 @@ class VideoProcessor {
   }
 
   transcode_format(
-    ff,
     input,
     output,
     edits,
@@ -246,7 +244,7 @@ class VideoProcessor {
       : "-c:v copy";
     // audio is always processed either for mutes or to match the cut video
     const audioFilter = `-af "${audioArgs.join(",")}" ${getAudioCodec()}`;
-    const command = `${filepath(ff)} -y ${
+    const command = `${filepath(this.binaries.ffmpeg.path)} -y ${
       start ? "-ss " + start + " -noaccurate_seek -copyts" : ""
     } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
       input
@@ -255,17 +253,7 @@ class VideoProcessor {
     return [new VideoJob(command, duration, edits)];
   }
 
-  remux_format(
-    ff,
-    input,
-    output,
-    edits,
-    progress,
-    tempDir,
-    duration,
-    start,
-    end
-  ) {
+  remux_format(input, output, edits, progress, tempDir, duration, start, end) {
     // process filters
     const cuts = edits.filter((edit) => edit.type === Filter.Types.CUT);
     const mutes = edits.filter((edit) => edit.type === Filter.Types.MUTE);
@@ -276,7 +264,6 @@ class VideoProcessor {
         ? path.join(tempDir, `audio${path.extname(input)}`)
         : output;
       commands = this.transcode_format(
-        ff,
         input,
         transcodeOut,
         mutes,
@@ -295,7 +282,7 @@ class VideoProcessor {
         .reduce((list, edit) => list.concat([edit.start, edit.end]), [])
         .filter((val) => parseFloat(val) > 0 && parseFloat(val) < duration)
         .join(",");
-      const command = `${filepath(ff)} -y ${
+      const command = `${filepath(this.binaries.ffmpeg.path)} -y ${
         start ? "-ss " + start + " -copyts -start_at_zero" : ""
       } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
         input
@@ -368,9 +355,7 @@ class VideoProcessor {
       });
     }
 
-    const format = this.remux_mode ? this.remux_format : this.transcode_format;
-    const commands = format(
-      this.binaries.ffmpeg.path,
+    const args = [
       this.source.file,
       output,
       filters,
@@ -378,8 +363,11 @@ class VideoProcessor {
       tempDir,
       this.source.duration,
       start,
-      end
-    );
+      end,
+    ];
+    const commands = this.remux_mode
+      ? this.remux_format(...args)
+      : this.transcode_format(...args);
     logger.debug(commands);
 
     // generate file
