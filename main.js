@@ -10,7 +10,7 @@ const VideoProcessor = require("./video");
 const logger = require("./log");
 
 // handle squirrel install
-if (require("electron-squirrel-startup")) return app.quit();
+if (require("electron-squirrel-startup")) app.quit();
 
 logger.debug("starting program");
 

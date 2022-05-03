@@ -1,170 +1,25 @@
 const fs = require("fs");
-const readline = require("readline");
 const path = require("path");
 const child_process = require("child_process");
 const util = require("util");
 const { video: videoSettings } = require("./settings");
 const logger = require("./log");
 const { Filter } = require("./edl");
-const { input } = require("./log");
 const uniqueFilename = require("unique-filename");
+const { getVideoCodec, getAudioCodec } = require("./codec");
 
 const exec = util.promisify(child_process.exec);
 
-const videoCodecs = { auto: "" };
-const audioCodecs = { aac: "-c:a aac" };
-
-function getVideoCodec() {
-  if (!Object.keys(videoCodecs).includes(videoSettings.video)) {
-    logger.error("unsupported video codec, using default");
-    return videoCodecs["auto"];
-  }
-  return videoCodecs[videoSettings.video];
-}
-function getAudioCodec() {
-  if (!Object.keys(audioCodecs).includes(videoSettings.audio)) {
-    logger.error("unsupported audio codec, using default");
-    return audioCodecs["aac"];
-  }
-  return audioCodecs[videoSettings.audio];
-}
 function filepath(file) {
   return file.includes(" ") ? `"${file}"` : file;
 }
 
-async function generateJoinFile(edits, tempDir) {
-  const fileContents = [];
-  const cut = edits.find((edit) => edit.type === Filter.Types.CUT);
-  if (cut) {
-    const fileStream = fs.createReadStream(path.join(tempDir, "out.csv"));
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity,
-    });
-    let fileIndex = parseFloat(cut.start) > 0 ? 0 : 1; // odds or evens
-    for await (const line of rl) {
-      const [file, start, end] = line.trim().split(",");
-      const fileNum = parseInt(file.replace("out", ""));
-      if ((fileNum + 2) % 2 == fileIndex) {
-        fileContents.push(`file ${file}`);
-      }
-    }
-    fs.writeFileSync(path.join(tempDir, "join.txt"), fileContents.join("\n"));
-  }
-  return fileContents;
-}
 class VideoJob {
-  constructor(command, duration, edits) {
-    const jobTypes = [
-      ...new Set(
-        edits.map((edit) =>
-          edit.type === Filter.Types.MUTE ? "Audio" : "Video"
-        )
-      ),
-    ].sort();
+  constructor(command, duration, message) {
     this.command = command;
     this.duration = duration * 1000000; // convert to microseconds
-    this.message = `Processing ${jobTypes.join(" and ")}...`;
+    this.message = message;
   }
-}
-function transcode_format(
-  ff,
-  input,
-  output,
-  edits,
-  progress,
-  tempDir,
-  duration,
-  start,
-  end
-) {
-  const formatCuts = (cuts) =>
-    cuts.map((edit) => `not(between(t,${edit.start},${edit.end}))`).join("*");
-  const formatMutes = (mutes) =>
-    mutes.map((edit) => `between(t,${edit.start},${edit.end})`).join("+");
-
-  const audioArgs = [];
-
-  // process filters
-  const cuts = formatCuts(
-    edits.filter((edit) => edit.type === Filter.Types.CUT)
-  );
-  const mutes = formatMutes(
-    edits.filter((edit) => edit.type === Filter.Types.MUTE)
-  );
-
-  if (mutes.length) {
-    audioArgs.push(`volume=enable='${mutes}':volume=0`);
-  }
-  if (cuts.length) {
-    audioArgs.push(`aselect='${cuts}',asetpts=N/SR/TB`);
-  }
-  const videoFilter = cuts.length
-    ? `-vf "select='${cuts}',setpts=N/FRAME_RATE/TB" ${getVideoCodec()}`
-    : "-c:v copy";
-  // audio is always processed either for mutes or to match the cut video
-  const audioFilter = `-af "${audioArgs.join(",")}" ${getAudioCodec()}`;
-  const command = `${filepath(ff)} -y ${
-    start ? "-ss " + start + " -noaccurate_seek -copyts" : ""
-  } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
-    input
-  )} -v error ${videoFilter} ${audioFilter} ${filepath(output)}`;
-
-  return [new VideoJob(command, duration, edits)];
-}
-
-function remux_format(
-  ff,
-  input,
-  output,
-  edits,
-  progress,
-  tempDir,
-  duration,
-  start,
-  end
-) {
-  // process filters
-  const cuts = edits.filter((edit) => edit.type === Filter.Types.CUT);
-  const mutes = edits.filter((edit) => edit.type === Filter.Types.MUTE);
-  let commands = [];
-
-  if (mutes.length) {
-    const transcodeOut = cuts.length
-      ? path.join(tempDir, `audio${path.extname(input)}`)
-      : output;
-    commands = transcode_format(
-      ff,
-      input,
-      transcodeOut,
-      mutes,
-      progress,
-      tempDir,
-      duration,
-      start,
-      end
-    );
-    input = transcodeOut;
-  }
-  if (cuts.length) {
-    const segmentList = path.join(tempDir, "out.csv");
-    const segmentOut = path.join(tempDir, `out%03d${path.extname(input)}`);
-    const videoFilter = cuts
-      .reduce((list, edit) => list.concat([edit.start, edit.end]), [])
-      .filter((val) => parseFloat(val) > 0 && parseFloat(val) < duration)
-      .join(",");
-    const command = `${filepath(ff)} -y ${
-      start ? "-ss " + start + " -copyts -start_at_zero" : ""
-    } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
-      input
-    )} -v error -c:v copy ${getAudioCodec()} -map 0:v:0 -map 0:a -f segment -segment_list ${filepath(
-      segmentList
-    )} -reset_timestamps 1 -segment_times ${videoFilter} ${filepath(
-      segmentOut
-    )}`;
-    commands.push(new VideoJob(command, duration, cuts));
-  }
-  return commands;
 }
 
 class Video {
@@ -205,45 +60,9 @@ class VideoProcessor {
       }
       // everything ok
       this.source = new Video(file, result.format.duration);
-      // try remux 5 sec clip to enable or disable remux mode
-      try {
-        var tempDir = fs.mkdtempSync(
-          path.join(path.dirname(this.source.file), "edl-")
-        );
-        const test_command = remux_format(
-          this.binaries.ffmpeg.path,
-          this.source.file,
-          "-",
-          [new Filter(0, 5, Filter.Types.CUT)],
-          "",
-          tempDir,
-          this.source.duration,
-          0,
-          2.5
-        )
-          .map((cmd) => cmd.command)
-          .join(" && ");
+      // may need to conditionally disable remux mode if we run into unsupported videos
+      this.remux_mode_available = true;
 
-        await exec(test_command);
-        const rl = readline.createInterface({
-          input: fs.createReadStream(path.join(tempDir, "out.csv")),
-          crlfDelay: Infinity,
-        });
-        this.remux_mode_available = true;
-        for await (const line of rl) {
-          const [file, start, end] = line.trim().split(",");
-          if (parseFloat(end) == 0) {
-            logger.error("Could not cut video. Disabling remux mode");
-            this.remux_mode_available = false;
-          }
-        }
-      } catch (error) {
-        logger.error(error);
-        this.remux_mode_available = false;
-      } finally {
-        // cleanup temp dir
-        fs.rmSync(tempDir, { recursive: true, force: true });
-      }
       const outputFilename = `${path.basename(
         file,
         path.extname(file)
@@ -324,9 +143,127 @@ class VideoProcessor {
     }
   }
 
+  transcode_format(
+    input,
+    output,
+    edits,
+    progress,
+    tempDir,
+    duration,
+    start,
+    end
+  ) {
+    const formatCuts = (cuts) =>
+      cuts.map((edit) => `not(between(t,${edit.start},${edit.end}))`).join("*");
+    const formatMutes = (mutes) =>
+      mutes.map((edit) => `between(t,${edit.start},${edit.end})`).join("+");
+
+    const audioArgs = [];
+
+    // process filters
+    const cuts = formatCuts(
+      edits.filter((edit) => edit.type === Filter.Types.CUT)
+    );
+    const mutes = formatMutes(
+      edits.filter((edit) => edit.type === Filter.Types.MUTE)
+    );
+
+    if (mutes.length) {
+      audioArgs.push(`volume=enable='${mutes}':volume=0`);
+    }
+    if (cuts.length) {
+      audioArgs.push(`aselect='${cuts}',asetpts=N/SR/TB`);
+    }
+    const videoFilter = cuts.length
+      ? `-vf "select='${cuts}',setpts=N/FRAME_RATE/TB" ${getVideoCodec()}`
+      : "-c:v copy";
+    // audio is always processed either for mutes or to match the cut video
+    const audioFilter = `-af "${audioArgs.join(",")}" ${getAudioCodec()}`;
+    const command = `${filepath(this.binaries.ffmpeg.path)} -y ${
+      start ? "-ss " + start + " -noaccurate_seek -copyts" : ""
+    } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
+      input
+    )} -v error ${videoFilter} ${audioFilter} ${filepath(output)}`;
+    const jobTypes = [];
+    if (mutes.length) jobTypes.push("Audio");
+    if (cuts.length) jobTypes.push("Video");
+    return [
+      new VideoJob(
+        command,
+        duration,
+        `Processing ${jobTypes.join(" and ")}...`
+      ),
+    ];
+  }
+
+  remux_format(input, output, edits, progress, tempDir, duration, start, end) {
+    // process filters
+    const cuts = edits.filter((edit) => edit.type === Filter.Types.CUT);
+    const mutes = edits.filter((edit) => edit.type === Filter.Types.MUTE);
+    let commands = [];
+
+    if (mutes.length) {
+      const transcodeOut = cuts.length
+        ? path.join(tempDir, `audio${path.extname(input)}`)
+        : output;
+      commands = this.transcode_format(
+        input,
+        transcodeOut,
+        mutes,
+        progress,
+        tempDir,
+        duration,
+        start,
+        end
+      );
+      input = transcodeOut;
+    }
+    if (cuts.length) {
+      let fileNum = 0;
+      const fileContents = [];
+      const joinFile = path.join(tempDir, "join.txt");
+      // first filter dummy record helper
+      if (parseFloat(cuts[0].start)) {
+        cuts.unshift({ end: start ? start : 0 });
+      }
+      // generate files
+      for (let i = 0; i < cuts.length; i++) {
+        if (parseFloat(cuts[i].end) < duration) {
+          const ss = cuts[i].end > 0 ? `-ss ${cuts[i].end}` : "";
+
+          let to = i < cuts.length - 1 ? `-to ${cuts[i + 1].start}` : "";
+          if (i == cuts.length - 1 && end) to = `-to ${end}`;
+          const part = `part${fileNum++}${path.extname(input)}`;
+
+          const c = `${filepath(
+            this.binaries.ffmpeg.path
+          )} -y ${ss} ${progress} -i ${filepath(
+            input
+          )} -v error ${to} -c:v copy -copyts -avoid_negative_ts make_zero ${getAudioCodec()} ${filepath(
+            path.join(tempDir, part)
+          )}`;
+          commands.push(new VideoJob(c, duration, "Processing Video..."));
+          fileContents.push(`file ${part}`);
+        }
+      }
+      fs.writeFileSync(joinFile, fileContents.join("\n"));
+      if (fileContents.length) {
+        const joinCommand = `${filepath(
+          this.binaries.ffmpeg.path
+        )} -y ${progress} -f concat -safe 0 -i ${filepath(
+          joinFile
+        )} -c copy ${filepath(output)}`;
+        commands.push(
+          new VideoJob(joinCommand, this.source.duration, "Saving Video...")
+        );
+      }
+    }
+    return commands;
+  }
+
   async preview(filters, padding, progress = "") {
     const previewFile =
-      uniqueFilename(path.dirname(this.destination.file), "preview") +
+      uniqueFilename(path.dirname(this.destination.file), ".preview") +
       path.extname(this.source.file);
 
     const windowArgs = '-alwaysontop -window_title "Filter Preview"';
@@ -376,16 +313,14 @@ class VideoProcessor {
   merge({ output, filters, progress, start = null, end = null }) {
     // prep work dir and commands
     try {
-      var tempDir = fs.mkdtempSync(path.join(path.dirname(output), "edl-"));
+      var tempDir = fs.mkdtempSync(path.join(path.dirname(output), ".edl-"));
     } catch (error) {
-      return new Promise((resolve, reject) => {
+      return new Promise((_, reject) => {
         reject(error);
       });
     }
 
-    const format = this.remux_mode ? remux_format : transcode_format;
-    const commands = format(
-      this.binaries.ffmpeg.path,
+    const args = [
       this.source.file,
       output,
       filters,
@@ -393,51 +328,28 @@ class VideoProcessor {
       tempDir,
       this.source.duration,
       start,
-      end
-    );
+      end,
+    ];
+    const commands = this.remux_mode
+      ? this.remux_format(...args)
+      : this.transcode_format(...args);
     logger.debug(commands);
 
     // generate file
     const command = commands.map((cmd) => cmd.command).join(" && ");
     logger.debug(command);
-    const cuts = filters.filter((edit) => edit.type === Filter.Types.CUT);
-    const needsJoin = this.remux_mode && cuts.length > 0;
-    if (needsJoin) {
-      const joinCommand = `${filepath(
-        this.binaries.ffmpeg.path
-      )} -y ${progress} -f concat -safe 0 -i ${filepath(
-        path.join(tempDir, "join.txt")
-      )} -c copy ${filepath(output)}`;
-      commands.push(new VideoJob(joinCommand, this.source.duration, cuts));
-    }
     return {
       jobs: commands,
       process: new Promise(async (resolve, reject) => {
         exec(command)
           .then((val) => {
-            // write join file
-            fs.access(
-              path.join(tempDir, "out.csv"),
-              fs.constants.F_OK,
-              async (err) => {
-                if (!err) {
-                  const fileContents = await generateJoinFile(filters, tempDir);
-                  logger.debug(fileContents);
-                  try {
-                    const joinCommand = commands[commands.length - 1].command;
-                    val = await exec(joinCommand);
-                  } catch (error) {
-                    reject(error);
-                  }
-                }
-                resolve(val);
-                // cleanup temp dir
-                fs.rmSync(tempDir, { recursive: true, force: true });
-              }
-            );
+            resolve(val);
           })
           .catch((err) => {
-            reject(err); // cleanup temp dir
+            reject(err);
+          })
+          .finally(() => {
+            // cleanup temp dir
             fs.rmSync(tempDir, { recursive: true, force: true });
           });
       }),
