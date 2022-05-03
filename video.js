@@ -9,6 +9,7 @@ const { Filter } = require("./edl");
 const { input } = require("./log");
 const uniqueFilename = require("unique-filename");
 const { getVideoCodec, getAudioCodec } = require("./codec");
+const { exit } = require("process");
 
 const exec = util.promisify(child_process.exec);
 
@@ -38,17 +39,10 @@ async function generateJoinFile(edits, tempDir) {
   return fileContents;
 }
 class VideoJob {
-  constructor(command, duration, edits) {
-    const jobTypes = [
-      ...new Set(
-        edits.map((edit) =>
-          edit.type === Filter.Types.MUTE ? "Audio" : "Video"
-        )
-      ),
-    ].sort();
+  constructor(command, duration, message) {
     this.command = command;
     this.duration = duration * 1000000; // convert to microseconds
-    this.message = `Processing ${jobTypes.join(" and ")}...`;
+    this.message = message;
   }
 }
 
@@ -91,6 +85,8 @@ class VideoProcessor {
       // everything ok
       this.source = new Video(file, result.format.duration);
       // try remux 5 sec clip to enable or disable remux mode
+      this.remux_mode_available = true;
+      /*
       try {
         var tempDir = fs.mkdtempSync(
           path.join(path.dirname(this.source.file), ".edl-")
@@ -127,7 +123,7 @@ class VideoProcessor {
       } finally {
         // cleanup temp dir
         fs.rmSync(tempDir, { recursive: true, force: true });
-      }
+      }*/
       const outputFilename = `${path.basename(
         file,
         path.extname(file)
@@ -249,8 +245,16 @@ class VideoProcessor {
     } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
       input
     )} -v error ${videoFilter} ${audioFilter} ${filepath(output)}`;
-
-    return [new VideoJob(command, duration, edits)];
+    const jobTypes = [];
+    if (mutes.length) jobTypes.push("Audio");
+    if (cuts.length) jobTypes.push("Video");
+    return [
+      new VideoJob(
+        command,
+        duration,
+        `Processing ${jobTypes.join(" and ")}...`
+      ),
+    ];
   }
 
   remux_format(input, output, edits, progress, tempDir, duration, start, end) {
@@ -276,22 +280,44 @@ class VideoProcessor {
       input = transcodeOut;
     }
     if (cuts.length) {
-      const segmentList = path.join(tempDir, "out.csv");
-      const segmentOut = path.join(tempDir, `out%03d${path.extname(input)}`);
-      const videoFilter = cuts
-        .reduce((list, edit) => list.concat([edit.start, edit.end]), [])
-        .filter((val) => parseFloat(val) > 0 && parseFloat(val) < duration)
-        .join(",");
-      const command = `${filepath(this.binaries.ffmpeg.path)} -y ${
-        start ? "-ss " + start + " -copyts -start_at_zero" : ""
-      } ${end ? "-to " + end : ""} ${progress} -i ${filepath(
-        input
-      )} -v error -c:v copy ${getAudioCodec()} -map 0:v:0 -map 0:a -f segment -segment_list ${filepath(
-        segmentList
-      )} -reset_timestamps 1 -segment_times ${videoFilter} ${filepath(
-        segmentOut
-      )}`;
-      commands.push(new VideoJob(command, duration, cuts));
+      let fileNum = 0;
+      const fileContents = [];
+      const joinFile = path.join(tempDir, "join.txt");
+      // first filter dummy record helper
+      if (parseFloat(cuts[0].start)) {
+        cuts.unshift({ end: start ? start : 0 });
+      }
+      // generate files
+      for (let i = 0; i < cuts.length; i++) {
+        if (parseFloat(cuts[i].end) < duration) {
+          const ss = cuts[i].end > 0 ? `-ss ${cuts[i].end}` : "";
+
+          let to = i < cuts.length - 1 ? `-to ${cuts[i + 1].start}` : "";
+          if (i == cuts.length - 1 && end) to = `-to ${end}`;
+          const part = `part${fileNum++}${path.extname(input)}`;
+
+          const c = `${filepath(
+            this.binaries.ffmpeg.path
+          )} -y ${ss} ${progress} -i ${filepath(
+            input
+          )} -v error ${to} -c:v copy -copyts -avoid_negative_ts make_zero ${getAudioCodec()} ${filepath(
+            path.join(tempDir, part)
+          )}`;
+          commands.push(new VideoJob(c, duration, "Processing Video..."));
+          fileContents.push(`file ${part}`);
+        }
+      }
+      fs.writeFileSync(joinFile, fileContents.join("\n"));
+      if (fileContents.length) {
+        const joinCommand = `${filepath(
+          this.binaries.ffmpeg.path
+        )} -y ${progress} -f concat -safe 0 -i ${filepath(
+          joinFile
+        )} -c copy ${filepath(output)}`;
+        commands.push(
+          new VideoJob(joinCommand, this.source.duration, "Saving Video...")
+        );
+      }
     }
     return commands;
   }
@@ -350,7 +376,7 @@ class VideoProcessor {
     try {
       var tempDir = fs.mkdtempSync(path.join(path.dirname(output), ".edl-"));
     } catch (error) {
-      return new Promise((resolve, reject) => {
+      return new Promise((_, reject) => {
         reject(error);
       });
     }
@@ -373,44 +399,18 @@ class VideoProcessor {
     // generate file
     const command = commands.map((cmd) => cmd.command).join(" && ");
     logger.debug(command);
-    const cuts = filters.filter((edit) => edit.type === Filter.Types.CUT);
-    const needsJoin = this.remux_mode && cuts.length > 0;
-    if (needsJoin) {
-      const joinCommand = `${filepath(
-        this.binaries.ffmpeg.path
-      )} -y ${progress} -f concat -safe 0 -i ${filepath(
-        path.join(tempDir, "join.txt")
-      )} -c copy ${filepath(output)}`;
-      commands.push(new VideoJob(joinCommand, this.source.duration, cuts));
-    }
     return {
       jobs: commands,
       process: new Promise(async (resolve, reject) => {
         exec(command)
           .then((val) => {
-            // write join file
-            fs.access(
-              path.join(tempDir, "out.csv"),
-              fs.constants.F_OK,
-              async (err) => {
-                if (!err) {
-                  const fileContents = await generateJoinFile(filters, tempDir);
-                  logger.debug(fileContents);
-                  try {
-                    const joinCommand = commands[commands.length - 1].command;
-                    val = await exec(joinCommand);
-                  } catch (error) {
-                    reject(error);
-                  }
-                }
-                resolve(val);
-                // cleanup temp dir
-                fs.rmSync(tempDir, { recursive: true, force: true });
-              }
-            );
+            resolve(val);
           })
           .catch((err) => {
-            reject(err); // cleanup temp dir
+            reject(err);
+          })
+          .finally(() => {
+            // cleanup temp dir
             fs.rmSync(tempDir, { recursive: true, force: true });
           });
       }),
