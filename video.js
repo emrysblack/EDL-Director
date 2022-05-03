@@ -1,15 +1,12 @@
 const fs = require("fs");
-const readline = require("readline");
 const path = require("path");
 const child_process = require("child_process");
 const util = require("util");
 const { video: videoSettings } = require("./settings");
 const logger = require("./log");
 const { Filter } = require("./edl");
-const { input } = require("./log");
 const uniqueFilename = require("unique-filename");
 const { getVideoCodec, getAudioCodec } = require("./codec");
-const { exit } = require("process");
 
 const exec = util.promisify(child_process.exec);
 
@@ -17,27 +14,6 @@ function filepath(file) {
   return file.includes(" ") ? `"${file}"` : file;
 }
 
-async function generateJoinFile(edits, tempDir) {
-  const fileContents = [];
-  const cut = edits.find((edit) => edit.type === Filter.Types.CUT);
-  if (cut) {
-    const fileStream = fs.createReadStream(path.join(tempDir, "out.csv"));
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity,
-    });
-    let fileIndex = parseFloat(cut.start) > 0 ? 0 : 1; // odds or evens
-    for await (const line of rl) {
-      const [file, start, end] = line.trim().split(",");
-      const fileNum = parseInt(file.replace("out", ""));
-      if ((fileNum + 2) % 2 == fileIndex) {
-        fileContents.push(`file ${file}`);
-      }
-    }
-    fs.writeFileSync(path.join(tempDir, "join.txt"), fileContents.join("\n"));
-  }
-  return fileContents;
-}
 class VideoJob {
   constructor(command, duration, message) {
     this.command = command;
@@ -84,46 +60,9 @@ class VideoProcessor {
       }
       // everything ok
       this.source = new Video(file, result.format.duration);
-      // try remux 5 sec clip to enable or disable remux mode
+      // may need to conditionally disable remux mode if we run into unsupported videos
       this.remux_mode_available = true;
-      /*
-      try {
-        var tempDir = fs.mkdtempSync(
-          path.join(path.dirname(this.source.file), ".edl-")
-        );
-        const test_command = this.remux_format(
-          this.source.file,
-          "-",
-          [new Filter(0, 5, Filter.Types.CUT)],
-          "",
-          tempDir,
-          this.source.duration,
-          0,
-          2.5
-        )
-          .map((cmd) => cmd.command)
-          .join(" && ");
 
-        await exec(test_command);
-        const rl = readline.createInterface({
-          input: fs.createReadStream(path.join(tempDir, "out.csv")),
-          crlfDelay: Infinity,
-        });
-        this.remux_mode_available = true;
-        for await (const line of rl) {
-          const [file, start, end] = line.trim().split(",");
-          if (parseFloat(end) == 0) {
-            logger.error("Could not cut video. Disabling remux mode");
-            this.remux_mode_available = false;
-          }
-        }
-      } catch (error) {
-        logger.error(error);
-        this.remux_mode_available = false;
-      } finally {
-        // cleanup temp dir
-        fs.rmSync(tempDir, { recursive: true, force: true });
-      }*/
       const outputFilename = `${path.basename(
         file,
         path.extname(file)
