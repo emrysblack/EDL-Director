@@ -222,6 +222,11 @@ class VideoProcessor {
       let fileNum = 0;
       const fileContents = [];
       const joinFile = path.join(tempDir, "join.txt");
+      // ffplay has a bug with playback of certain audio formats like trueHD, so we conditionally encode for previews
+      // that use ffplay
+      const audioFilter = path.basename(output).startsWith(".preview")
+        ? "-c:a aac"
+        : "-c:a copy";
       // first filter dummy record helper
       if (parseFloat(cuts[0].start)) {
         cuts.unshift({ end: start ? start : 0 });
@@ -239,7 +244,7 @@ class VideoProcessor {
             this.binaries.ffmpeg.path
           )} -y ${ss} ${progress} -i ${filepath(
             input
-          )} -v error ${to} -c:v copy -copyts -avoid_negative_ts make_zero ${getAudioCodec()} ${filepath(
+          )} -v error ${to} -c:v copy -copyts -avoid_negative_ts make_zero ${audioFilter} ${filepath(
             path.join(tempDir, part)
           )}`;
           commands.push(new VideoJob(c, duration, "Processing Video..."));
